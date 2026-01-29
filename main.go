@@ -146,6 +146,9 @@ func fetchMetrics() {
 
 		wg.Add(1)
 		go fetchLogpushAnalyticsForZone(filteredZones, &wg)
+
+		wg.Add(1)
+		go fetchEdgeErrorsByPathAnalytics(filteredZones, &wg)
 	} else if zoneCount > cfgraphqlreqlimit {
 		for s := 0; s < zoneCount; s += cfgraphqlreqlimit {
 			e := s + cfgraphqlreqlimit
@@ -163,6 +166,9 @@ func fetchMetrics() {
 
 			wg.Add(1)
 			go fetchLogpushAnalyticsForZone(filteredZones[s:e], &wg)
+
+			wg.Add(1)
+			go fetchEdgeErrorsByPathAnalytics(filteredZones[s:e], &wg)
 		}
 	}
 
@@ -286,6 +292,10 @@ func main() {
 	flags.Bool("enable_pprof", false, "enable pprof profiling endpoints at /debug/pprof/")
 	viper.BindEnv("enable_pprof")
 	viper.SetDefault("enable_pprof", false)
+
+	flags.Bool("enable_edge_errors_by_path", false, "enable edge errors by path metric (high cardinality)")
+	viper.BindEnv("enable_edge_errors_by_path")
+	viper.SetDefault("enable_edge_errors_by_path", false)
 
 	viper.BindPFlags(flags)
 
