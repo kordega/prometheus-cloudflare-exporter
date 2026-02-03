@@ -440,8 +440,37 @@ func fetchFirewallRules(zoneID string) map[string]string {
 	return firewallRulesMap
 }
 
-func fetchAccounts() []cfaccounts.Account {
+func fetchAccounts(targetAccountIDs []string) []cfaccounts.Account {
 	var cfAccounts []cfaccounts.Account
+
+	if len(targetAccountIDs) > 0 {
+		log.Info("Using provided account IDs (account-scoped token mode)")
+		for _, accountID := range targetAccountIDs {
+			accountID = strings.TrimSpace(accountID)
+			if accountID == "" {
+				continue
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), cftimeout)
+			account, err := cfclient.Accounts.Get(ctx, cfaccounts.AccountGetParams{
+				AccountID: cf.F(accountID),
+			})
+			cancel()
+
+			if err != nil {
+				log.Warnf("Account %s details unavailable, using ID only: %v", accountID, err)
+				cfAccounts = append(cfAccounts, cfaccounts.Account{
+					ID: accountID,
+				})
+			} else {
+				cfAccounts = append(cfAccounts, *account)
+			}
+		}
+		log.Infof("Loaded %d account(s) from CF_ACCOUNTS", len(cfAccounts))
+		return cfAccounts
+	}
+
+	log.Info("Listing all accessible accounts (user-level token mode)")
 	ctx, cancel := context.WithTimeout(context.Background(), cftimeout)
 	defer cancel()
 	page := cfclient.Accounts.ListAutoPaging(ctx,

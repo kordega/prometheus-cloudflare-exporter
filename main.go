@@ -39,6 +39,15 @@ var (
 // 	cfgMetricsDenylist = ""
 // )
 
+func getTargetAccounts() []string {
+	var accountIDs []string
+
+	if len(viper.GetString("cf_accounts")) > 0 {
+		accountIDs = strings.Split(viper.GetString("cf_accounts"), ",")
+	}
+	return accountIDs
+}
+
 func getTargetZones() []string {
 	var zoneIDs []string
 
@@ -105,7 +114,8 @@ func filterExcludedZones(all []cfzones.Zone, exclude []string) []cfzones.Zone {
 
 func fetchMetrics() {
 	var wg sync.WaitGroup
-	accounts := fetchAccounts()
+	targetAccounts := getTargetAccounts()
+	accounts := fetchAccounts(targetAccounts)
 
 	for _, a := range accounts {
 		wg.Add(1)
@@ -250,6 +260,10 @@ func main() {
 
 	flags.String("cf_api_token", "", "cloudflare api token (preferred)")
 	viper.BindEnv("cf_api_token")
+
+	flags.String("cf_accounts", "", "cloudflare accounts to monitor, comma delimited list of account ids (required for account-scoped API tokens)")
+	viper.BindEnv("cf_accounts")
+	viper.SetDefault("cf_accounts", "")
 
 	flags.String("cf_zones", "", "cloudflare zones to export, comma delimited list of zone ids")
 	viper.BindEnv("cf_zones")
