@@ -112,6 +112,24 @@ type zoneRespASN struct {
 }
 
 
+type cloudflareResponseEdgeErrorsByPath struct {
+	Viewer struct {
+		Zones []zoneRespEdgeErrorsByPath `json:"zones"`
+	} `json:"viewer"`
+}
+
+type zoneRespEdgeErrorsByPath struct {
+	ZoneTag                    string `json:"zoneTag"`
+	HTTPRequestsAdaptiveGroups []struct {
+		Count      uint64 `json:"count"`
+		Dimensions struct {
+			EdgeResponseStatus    uint16 `json:"edgeResponseStatus"`
+			ClientRequestHTTPHost string `json:"clientRequestHTTPHost"`
+			ClientRequestPath     string `json:"clientRequestPath"`
+		} `json:"dimensions"`
+	} `json:"httpRequestsAdaptiveGroups"`
+}
+
 type logpushResponse struct {
 	LogpushHealthAdaptiveGroups []struct {
 		Count uint64 `json:"count"`
@@ -467,8 +485,37 @@ func fetchFirewallRules(zoneID string) map[string]string {
 	return firewallRulesMap
 }
 
-func fetchAccounts() []cfaccounts.Account {
+func fetchAccounts(targetAccountIDs []string) []cfaccounts.Account {
 	var cfAccounts []cfaccounts.Account
+
+	if len(targetAccountIDs) > 0 {
+		log.Info("Using provided account IDs (account-scoped token mode)")
+		for _, accountID := range targetAccountIDs {
+			accountID = strings.TrimSpace(accountID)
+			if accountID == "" {
+				continue
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), cftimeout)
+			account, err := cfclient.Accounts.Get(ctx, cfaccounts.AccountGetParams{
+				AccountID: cf.F(accountID),
+			})
+			cancel()
+
+			if err != nil {
+				log.Warnf("Account %s details unavailable, using ID only: %v", accountID, err)
+				cfAccounts = append(cfAccounts, cfaccounts.Account{
+					ID: accountID,
+				})
+			} else {
+				cfAccounts = append(cfAccounts, *account)
+			}
+		}
+		log.Infof("Loaded %d account(s) from CF_ACCOUNTS", len(cfAccounts))
+		return cfAccounts
+	}
+
+	log.Info("Listing all accessible accounts (user-level token mode)")
 	ctx, cancel := context.WithTimeout(context.Background(), cftimeout)
 	defer cancel()
 	page := cfclient.Accounts.ListAutoPaging(ctx,
@@ -882,6 +929,53 @@ func fetchLogpushZone(zoneIDs []string) (*cloudflareResponseLogpushZone, error) 
 	var resp cloudflareResponseLogpushZone
 	if err := gql.Client.Run(ctx, request, &resp); err != nil {
 		log.Errorf("error fetching logpush zone totals, err:%v", err)
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+func fetchEdgeErrorsByPath(zoneIDs []string) (*cloudflareResponseEdgeErrorsByPath, error) {
+	request := graphql.NewRequest(`
+	query ($zoneIDs: [String!], $mintime: Time!, $maxtime: Time!, $limit: Int!) {
+		viewer {
+			zones(filter: { zoneTag_in: $zoneIDs }) {
+				zoneTag
+				httpRequestsAdaptiveGroups(
+					limit: $limit
+					filter: {
+						datetime_geq: $mintime
+						datetime_lt: $maxtime
+						edgeResponseStatus_geq: 400
+					}
+				) {
+					count
+					dimensions {
+						edgeResponseStatus
+						clientRequestHTTPHost
+						clientRequestPath
+					}
+				}
+			}
+		}
+	}
+`)
+
+	now, now1mAgo := GetTimeRange()
+	request.Var("limit", gqlQueryLimit)
+	request.Var("maxtime", now)
+	request.Var("mintime", now1mAgo)
+	request.Var("zoneIDs", zoneIDs)
+
+	gql.Mu.RLock()
+	defer gql.Mu.RUnlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), cftimeout)
+	defer cancel()
+
+	var resp cloudflareResponseEdgeErrorsByPath
+	if err := gql.Client.Run(ctx, request, &resp); err != nil {
+		log.Errorf("failed to fetch edge errors by path, err:%v", err)
 		return nil, err
 	}
 

@@ -63,8 +63,9 @@ const (
 	tunnelHealthStatusMetricName                    MetricName = "cloudflare_tunnel_health_status"
 	tunnelConnectorInfoMetricName                   MetricName = "cloudflare_tunnel_connector_info"
 	tunnelConnectorActiveConnectionsMetricName      MetricName = "cloudflare_tunnel_connector_active_connections"
-	zoneRequestASNMetricName                     MetricName = "cloudflare_zone_requests_asn"
-	zoneBandwidthASNMetricName                   MetricName = "cloudflare_zone_bandwidth_asn"
+	zoneRequestASNMetricName                        MetricName = "cloudflare_zone_requests_asn"
+	zoneBandwidthASNMetricName                      MetricName = "cloudflare_zone_bandwidth_asn"
+	zoneEdgeErrorsByPathMetricName                  MetricName = "cloudflare_zone_edge_errors_by_path"
 )
 
 type MetricsSet map[MetricName]struct{}
@@ -346,6 +347,11 @@ var (
 		Name: zoneBandwidthASNMetricName.String(),
 		Help: "Bandwidth per ASN (Autonomous System Number) in bytes",
 	}, []string{"zone", "account", "asn", "asn_description"})
+  
+	zoneEdgeErrorsByPath = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: zoneEdgeErrorsByPathMetricName.String(),
+		Help: "Number of edge errors (4xx and 5xx) by request path",
+	}, []string{"zone", "account", "status", "host", "path"})
 )
 
 func buildAllMetricsSet() MetricsSet {
@@ -358,6 +364,9 @@ func buildAllMetricsSet() MetricsSet {
 	allMetricsSet.Add(zoneRequestHTTPStatusMetricName)
 	allMetricsSet.Add(zoneRequestBrowserMapMetricName)
 	allMetricsSet.Add(zoneRequestOriginStatusCountryHostMetricName)
+	allMetricsSet.Add(zoneRequestOriginStatusCountryHostP50MetricName)
+	allMetricsSet.Add(zoneRequestOriginStatusCountryHostP95MetricName)
+	allMetricsSet.Add(zoneRequestOriginStatusCountryHostP99MetricName)
 	allMetricsSet.Add(zoneRequestStatusCountryHostMetricName)
 	allMetricsSet.Add(zoneBandwidthTotalMetricName)
 	allMetricsSet.Add(zoneBandwidthCachedMetricName)
@@ -391,6 +400,7 @@ func buildAllMetricsSet() MetricsSet {
 	allMetricsSet.Add(tunnelConnectorActiveConnectionsMetricName)
 	allMetricsSet.Add(zoneRequestASNMetricName)
 	allMetricsSet.Add(zoneBandwidthASNMetricName)
+	allMetricsSet.Add(zoneEdgeErrorsByPathMetricName)
 	return allMetricsSet
 }
 
@@ -542,6 +552,9 @@ func mustRegisterMetrics(deniedMetrics MetricsSet) {
 	}
 	if !deniedMetrics.Has(zoneBandwidthASNMetricName) {
 		prometheus.MustRegister(zoneBandwidthASN)
+  }
+	if !deniedMetrics.Has(zoneEdgeErrorsByPathMetricName) {
+		prometheus.MustRegister(zoneEdgeErrorsByPath)
 	}
 }
 
@@ -919,6 +932,54 @@ func addHTTPAdaptiveGroups(z *zoneResp, name string, account string) {
 				"status":  strconv.Itoa(int(g.Dimensions.EdgeResponseStatus)),
 				"country": g.Dimensions.ClientCountryName,
 				"host":    g.Dimensions.ClientRequestHTTPHost,
+			}).Add(float64(g.Count))
+	}
+}
+
+func fetchEdgeErrorsByPathAnalytics(zones []cfzones.Zone, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	if !viper.GetBool("enable_edge_errors_by_path") {
+		return
+	}
+
+	if viper.GetBool("free_tier") {
+		return
+	}
+
+	zoneIDs := extractZoneIDs(zones)
+	if len(zoneIDs) == 0 {
+		return
+	}
+
+	r, err := fetchEdgeErrorsByPath(zoneIDs)
+	if err != nil {
+		log.Error("failed to fetch edge errors by path: ", err)
+		return
+	}
+
+	for _, z := range r.Viewer.Zones {
+		name, account := findZoneAccountName(zones, z.ZoneTag)
+		addEdgeErrorsByPath(&z, name, account)
+	}
+}
+
+func addEdgeErrorsByPath(z *zoneRespEdgeErrorsByPath, name string, account string) {
+	if len(z.HTTPRequestsAdaptiveGroups) == 0 {
+		return
+	}
+
+	label := prometheus.Labels{"zone": name, "account": account}
+	zoneEdgeErrorsByPath.DeletePartialMatch(label)
+
+	for _, g := range z.HTTPRequestsAdaptiveGroups {
+		zoneEdgeErrorsByPath.With(
+			prometheus.Labels{
+				"zone":    name,
+				"account": account,
+				"status":  strconv.Itoa(int(g.Dimensions.EdgeResponseStatus)),
+				"host":    g.Dimensions.ClientRequestHTTPHost,
+				"path":    normalizePath(g.Dimensions.ClientRequestPath),
 			}).Add(float64(g.Count))
 	}
 }

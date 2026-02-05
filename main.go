@@ -39,6 +39,15 @@ var (
 // 	cfgMetricsDenylist = ""
 // )
 
+func getTargetAccounts() []string {
+	var accountIDs []string
+
+	if len(viper.GetString("cf_accounts")) > 0 {
+		accountIDs = strings.Split(viper.GetString("cf_accounts"), ",")
+	}
+	return accountIDs
+}
+
 func getTargetZones() []string {
 	var zoneIDs []string
 
@@ -105,7 +114,8 @@ func filterExcludedZones(all []cfzones.Zone, exclude []string) []cfzones.Zone {
 
 func fetchMetrics() {
 	var wg sync.WaitGroup
-	accounts := fetchAccounts()
+	targetAccounts := getTargetAccounts()
+	accounts := fetchAccounts(targetAccounts)
 
 	for _, a := range accounts {
 		wg.Add(1)
@@ -149,6 +159,9 @@ func fetchMetrics() {
 
 		wg.Add(1)
 		go fetchZoneASNAnalytics(filteredZones, &wg)
+    
+    wg.Add(1)
+		go fetchEdgeErrorsByPathAnalytics(filteredZones, &wg)
 	} else if zoneCount > cfgraphqlreqlimit {
 		for s := 0; s < zoneCount; s += cfgraphqlreqlimit {
 			e := s + cfgraphqlreqlimit
@@ -169,6 +182,9 @@ func fetchMetrics() {
 
 			wg.Add(1)
 			go fetchZoneASNAnalytics(filteredZones[s:e], &wg)
+      
+      wg.Add(1)
+			go fetchEdgeErrorsByPathAnalytics(filteredZones[s:e], &wg)
 		}
 	}
 
@@ -257,6 +273,10 @@ func main() {
 	flags.String("cf_api_token", "", "cloudflare api token (preferred)")
 	viper.BindEnv("cf_api_token")
 
+	flags.String("cf_accounts", "", "cloudflare accounts to monitor, comma delimited list of account ids (required for account-scoped API tokens)")
+	viper.BindEnv("cf_accounts")
+	viper.SetDefault("cf_accounts", "")
+
 	flags.String("cf_zones", "", "cloudflare zones to export, comma delimited list of zone ids")
 	viper.BindEnv("cf_zones")
 	viper.SetDefault("cf_zones", "")
@@ -292,6 +312,10 @@ func main() {
 	flags.Bool("enable_pprof", false, "enable pprof profiling endpoints at /debug/pprof/")
 	viper.BindEnv("enable_pprof")
 	viper.SetDefault("enable_pprof", false)
+
+	flags.Bool("enable_edge_errors_by_path", false, "enable edge errors by path metric (high cardinality)")
+	viper.BindEnv("enable_edge_errors_by_path")
+	viper.SetDefault("enable_edge_errors_by_path", false)
 
 	viper.BindPFlags(flags)
 
