@@ -67,6 +67,7 @@ The exporter can be configured using env variables or command flags.
 | `SCRAPE_INTERVAL` | scrape interval in seconds (will query cloudflare every SCRAPE_INTERVAL seconds), default `60` |
 | `METRICS_DENYLIST` | (Optional) cloudflare-exporter metrics to not export, comma delimited list of cloudflare-exporter metrics. If not set, all metrics are exported |
 | `ENABLE_PPROF` | (Optional) enable pprof profiling endpoints at `/debug/pprof/`. Accepts `true` or `false`, default `false`. **Warning**: Only enable in development/debugging environments |
+| `ENABLE_EDGE_ERRORS_BY_PATH` | (Optional) enable edge errors by path metric. Accepts `true` or `false`, default `false`. See [Edge Errors by Path Metric](#edge-errors-by-path-metric-opt-in) |
 | `ZONE_<NAME>` |  `DEPRECATED since 0.0.5` (optional) Zone ID. Add zones you want to scrape by adding env vars in this format. You can find the zone ids in Cloudflare dashboards. |
 | `LOG_LEVEL` | Set loglevel. Options are error, warn, info, debug. default `error` |
 
@@ -86,6 +87,7 @@ Corresponding flags:
   -scrape_interval=60: scrape interval in seconds, defaults to 60
   -metrics_denylist="": cloudflare-exporter metrics to not export, comma delimited list
   -enable_pprof=false: enable pprof profiling endpoints at /debug/pprof/
+  -enable_edge_errors_by_path=false: enable edge errors by path metric (high cardinality, opt-in)
   -log_level="error": log level(error,warn,info,debug)
 ```
 
@@ -119,6 +121,7 @@ Note: `ZONE_<name>` configuration is not supported as flag.
 # HELP cloudflare_zone_requests_status_country_host Count of requests for zone per edge HTTP status per country per host
 # HELP cloudflare_zone_requests_browser_map_page_views_count Number of successful requests for HTML pages per zone
 # HELP cloudflare_zone_requests_total Number of requests for zone
+# HELP cloudflare_zone_edge_errors_by_path Number of edge errors (4xx and 5xx) by request path
 # HELP cloudflare_zone_threats_country Threats per zone per country
 # HELP cloudflare_zone_threats_total Threats per zone
 # HELP cloudflare_zone_uniques_total Uniques per zone
@@ -130,6 +133,14 @@ Note: `ZONE_<name>` configuration is not supported as flag.
 # HELP cloudflare_r2_storage_bytes Storage used by R2
 # HELP cloudflare_r2_storage_total_bytes Total storage used by R2
 ```
+
+### Edge Errors by Path Metric (Opt-in)
+
+The `cloudflare_zone_edge_errors_by_path` metric tracks edge errors (4xx/5xx) by request path. This enables path-based filtering in alerts to exclude known-noisy endpoints while catching real issues.
+
+**Disabled by default** due to high cardinality. Enable with `ENABLE_EDGE_ERRORS_BY_PATH=true`.
+
+Paths are normalized to reduce cardinality (e.g., `/users/123` → `/users/:id`, UUIDs → `:uuid`).
 
 ## Helm chart repository
 

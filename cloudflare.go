@@ -85,6 +85,24 @@ type cloudflareResponseLogpushZone struct {
 	} `json:"viewer"`
 }
 
+type cloudflareResponseEdgeErrorsByPath struct {
+	Viewer struct {
+		Zones []zoneRespEdgeErrorsByPath `json:"zones"`
+	} `json:"viewer"`
+}
+
+type zoneRespEdgeErrorsByPath struct {
+	ZoneTag                    string `json:"zoneTag"`
+	HTTPRequestsAdaptiveGroups []struct {
+		Count      uint64 `json:"count"`
+		Dimensions struct {
+			EdgeResponseStatus    uint16 `json:"edgeResponseStatus"`
+			ClientRequestHTTPHost string `json:"clientRequestHTTPHost"`
+			ClientRequestPath     string `json:"clientRequestPath"`
+		} `json:"dimensions"`
+	} `json:"httpRequestsAdaptiveGroups"`
+}
+
 type logpushResponse struct {
 	LogpushHealthAdaptiveGroups []struct {
 		Count uint64 `json:"count"`
@@ -855,6 +873,53 @@ func fetchLogpushZone(zoneIDs []string) (*cloudflareResponseLogpushZone, error) 
 	var resp cloudflareResponseLogpushZone
 	if err := gql.Client.Run(ctx, request, &resp); err != nil {
 		log.Errorf("error fetching logpush zone totals, err:%v", err)
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+func fetchEdgeErrorsByPath(zoneIDs []string) (*cloudflareResponseEdgeErrorsByPath, error) {
+	request := graphql.NewRequest(`
+	query ($zoneIDs: [String!], $mintime: Time!, $maxtime: Time!, $limit: Int!) {
+		viewer {
+			zones(filter: { zoneTag_in: $zoneIDs }) {
+				zoneTag
+				httpRequestsAdaptiveGroups(
+					limit: $limit
+					filter: {
+						datetime_geq: $mintime
+						datetime_lt: $maxtime
+						edgeResponseStatus_geq: 400
+					}
+				) {
+					count
+					dimensions {
+						edgeResponseStatus
+						clientRequestHTTPHost
+						clientRequestPath
+					}
+				}
+			}
+		}
+	}
+`)
+
+	now, now1mAgo := GetTimeRange()
+	request.Var("limit", gqlQueryLimit)
+	request.Var("maxtime", now)
+	request.Var("mintime", now1mAgo)
+	request.Var("zoneIDs", zoneIDs)
+
+	gql.Mu.RLock()
+	defer gql.Mu.RUnlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), cftimeout)
+	defer cancel()
+
+	var resp cloudflareResponseEdgeErrorsByPath
+	if err := gql.Client.Run(ctx, request, &resp); err != nil {
+		log.Errorf("failed to fetch edge errors by path, err:%v", err)
 		return nil, err
 	}
 
