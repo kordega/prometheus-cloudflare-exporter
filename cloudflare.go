@@ -430,8 +430,10 @@ func fetchZones(accounts []cfaccounts.Account, isAccountScoped bool, targetZoneI
 			}
 			zone, err := fetchZoneByID(zoneID)
 			if err != nil {
-				log.Warnf("Could not fetch zone %s details, using ID only: %v", zoneID, err)
-				zones = append(zones, cfzones.Zone{ID: zoneID})
+				// Minimal zone object: only ID is set. Zone name and plan data
+			// will be empty, but GraphQL analytics queries only need the ID.
+			log.Warnf("Could not fetch zone %s details, using ID only: %v", zoneID, err)
+			zones = append(zones, cfzones.Zone{ID: zoneID})
 			} else {
 				zones = append(zones, *zone)
 			}
