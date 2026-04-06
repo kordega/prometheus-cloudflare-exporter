@@ -1,3 +1,4 @@
+---
 name: Cloudflare exporter testsuite
 vars:
   basePort: "8081"
