@@ -395,18 +395,52 @@ func getAccountZoneList(accountID string) ([]cfzones.Zone, error) {
 	return zoneList, nil
 }
 
-func fetchZones(accounts []cfaccounts.Account) []cfzones.Zone {
+func fetchZoneByID(zoneID string) (*cfzones.Zone, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), cftimeout)
+	defer cancel()
+	return cfclient.Zones.Get(ctx, cfzones.ZoneGetParams{
+		ZoneID: cf.F(zoneID),
+	})
+}
+
+func fetchZones(accounts []cfaccounts.Account, isAccountScoped bool, targetZoneIDs []string) []cfzones.Zone {
 	var zones []cfzones.Zone
 
 	for _, account := range accounts {
 		z, err := getAccountZoneList(account.ID)
 
 		if err != nil {
-			log.Errorf("error fetching zones: %v", err)
+			if isAccountScoped {
+				log.Warnf("Zone listing via API failed for account %s (expected with account-scoped tokens): %v", account.ID, err)
+			} else {
+				log.Errorf("error fetching zones: %v", err)
+			}
 			continue
 		}
 		zones = append(zones, z...)
 	}
+
+	// When zone listing fails for account-scoped tokens, fall back to CF_ZONES
+	if len(zones) == 0 && isAccountScoped && len(targetZoneIDs) > 0 {
+		log.Info("Falling back to fetching individual zones from CF_ZONES for account-scoped token")
+		for _, zoneID := range targetZoneIDs {
+			zoneID = strings.TrimSpace(zoneID)
+			if zoneID == "" {
+				continue
+			}
+			zone, err := fetchZoneByID(zoneID)
+			if err != nil {
+				log.Warnf("Could not fetch zone %s details, using ID only: %v", zoneID, err)
+				zones = append(zones, cfzones.Zone{ID: zoneID})
+			} else {
+				zones = append(zones, *zone)
+			}
+		}
+		log.Infof("Loaded %d zone(s) from CF_ZONES", len(zones))
+	} else if len(zones) == 0 && isAccountScoped {
+		log.Warn("No zones found. For account-scoped tokens, set CF_ZONES with your zone IDs to enable zone-level metrics.")
+	}
+
 	return zones
 }
 
@@ -1118,7 +1152,13 @@ func filterNonFreePlanZones(zones []cfzones.Zone) (filteredZones []cfzones.Zone)
 	for _, z := range zones {
 		extraFields, err := jsonStringToMap(z.JSON.ExtraFields["plan"].Raw())
 		if err != nil {
-			log.Error(err)
+			// Include zones without plan data (e.g. from account-scoped token fallback)
+			// rather than silently dropping them
+			log.Warnf("Couldn't resolve plan for zone %s (%s), including zone anyway", z.Name, z.ID)
+			if !contains(zoneIDs, z.ID) {
+				zoneIDs = append(zoneIDs, z.ID)
+				filteredZones = append(filteredZones, z)
+			}
 			continue
 		}
 		if extraFields["id"] == freePlanID {

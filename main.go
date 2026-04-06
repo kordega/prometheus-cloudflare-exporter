@@ -134,9 +134,10 @@ func fetchMetrics() {
 		go fetchZeroTrustAnalyticsForAccount(a, &wg)
 	}
 
-	zones := fetchZones(accounts)
-	tzones := getTargetZones()
-	fzones := filterZones(zones, tzones)
+	isAccountScoped := len(targetAccounts) > 0
+	targetZoneIDs := getTargetZones()
+	zones := fetchZones(accounts, isAccountScoped, targetZoneIDs)
+	fzones := filterZones(zones, targetZoneIDs)
 	ezones := getExcludedZones()
 	filteredZones := filterExcludedZones(fzones, ezones)
 	if !viper.GetBool("free_tier") {

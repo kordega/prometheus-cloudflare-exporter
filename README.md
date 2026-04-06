@@ -49,7 +49,8 @@ Required authentication scopes:
 **To authenticate with an account-scoped token**:
 - Set `CF_API_TOKEN` with your account-scoped token
 - Set `CF_ACCOUNTS` with your account ID (find it in the Cloudflare dashboard URL: `https://dash.cloudflare.com/<ACCOUNT_ID>/...`)
-- Example: `CF_ACCOUNTS=abc123def456` or for multiple accounts: `CF_ACCOUNTS=abc123,def456`
+- Set `CF_ZONES` with the zone IDs you want to monitor (account-scoped tokens cannot auto-discover zones)
+- Example: `CF_ACCOUNTS=abc123def456 CF_ZONES=zone1,zone2`
 
 ### User email + API key
 
