@@ -94,7 +94,7 @@ type cloudflareResponseASN struct {
 type zoneRespASN struct {
 	ZoneTag string `json:"zoneTag"`
 
-	HttpRequestsASNGroups []struct {
+	HTTPRequestsASNGroups []struct {
 		Count      uint64 `json:"count"`
 		Dimensions struct {
 			Datetime             string `json:"datetime"`
@@ -110,7 +110,6 @@ type zoneRespASN struct {
 		} `json:"avg"`
 	} `json:"httpRequestsAdaptiveGroups"`
 }
-
 
 type cloudflareResponseEdgeErrorsByPath struct {
 	Viewer struct {
