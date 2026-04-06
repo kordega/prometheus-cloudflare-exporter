@@ -347,7 +347,7 @@ var (
 		Name: zoneBandwidthASNMetricName.String(),
 		Help: "Bandwidth per ASN (Autonomous System Number) in bytes",
 	}, []string{"zone", "account", "asn", "asn_description"})
-  
+
 	zoneEdgeErrorsByPath = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: zoneEdgeErrorsByPathMetricName.String(),
 		Help: "Number of edge errors (4xx and 5xx) by request path",
@@ -552,7 +552,7 @@ func mustRegisterMetrics(deniedMetrics MetricsSet) {
 	}
 	if !deniedMetrics.Has(zoneBandwidthASNMetricName) {
 		prometheus.MustRegister(zoneBandwidthASN)
-  }
+	}
 	if !deniedMetrics.Has(zoneEdgeErrorsByPathMetricName) {
 		prometheus.MustRegister(zoneEdgeErrorsByPath)
 	}
@@ -1145,11 +1145,11 @@ func fetchZoneASNAnalytics(zones []cfzones.Zone, wg *sync.WaitGroup) {
 }
 
 func addASNGroups(z *zoneRespASN, name string, account string) {
-	if len(z.HttpRequestsASNGroups) == 0 {
+	if len(z.HTTPRequestsASNGroups) == 0 {
 		return
 	}
 
-	for _, g := range z.HttpRequestsASNGroups {
+	for _, g := range z.HTTPRequestsASNGroups {
 		asn := g.Dimensions.ClientASN
 		asnDesc := g.Dimensions.ClientASNDescription
 		if asnDesc == "" {
