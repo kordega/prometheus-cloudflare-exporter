@@ -36,7 +36,7 @@ jobs:
           helm repo add stable https://charts.helm.sh/stable
           helm repo add incubator https://charts.helm.sh/incubator
 
-      - name: Run chart-releaser
+      - name: Release Helm charts
         uses: helm/chart-releaser-action@v1.7.0
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"

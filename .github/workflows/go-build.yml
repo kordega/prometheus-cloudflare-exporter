@@ -18,7 +18,7 @@ jobs:
             name: 'cloudflare-exporter'
             compress: 'false'
             dest: 'dist'
-      - name: Copy build-artifacts
+      - name: Publish release binaries
         uses: skx/github-action-publish-binaries@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

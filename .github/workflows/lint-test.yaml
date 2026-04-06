@@ -11,19 +11,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Helm
+      - name: Set up Helm CLI
         uses: azure/setup-helm@v4
         with:
           version: v3.19.0
 
-      - uses: actions/setup-python@v6
+      - name: Set up Python runtime
+        uses: actions/setup-python@v6
         with:
           python-version: 3.12
 
-      - name: Set up chart-testing
+      - name: Install chart-testing tool
         uses: helm/chart-testing-action@v2.8.0
 
-      - name: Run chart-testing (list-changed)
+      - name: Detect changed Helm charts
         id: list-changed
         run: |
           changed=$(ct list-changed --target-branch master)
@@ -31,12 +32,12 @@ jobs:
             echo "::set-output name=changed::true"
           fi
 
-      - name: Run chart-testing (lint)
+      - name: Lint Helm charts
         run: ct lint --target-branch master
 
       - name: Create kind cluster
         uses: helm/kind-action@v1.13.0
         if: steps.list-changed.outputs.changed == 'true'
 
-      - name: Run chart-testing (install)
+      - name: Test Helm chart installation
         run: ct install --target-branch master
