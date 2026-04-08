@@ -30,7 +30,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Extracted version: $VERSION"
 
-      - name: Login to Github Packages
+      - name: Authenticate with GitHub Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
@@ -38,16 +38,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
 
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+      - name: Set up Go toolchain
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
         with:
           go-version-file: "go.mod"
           cache: false
 
 
-      - uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
+      - name: Set up Ko container image builder
+        uses: ko-build/setup-ko@d006021bd0c28d1ce33a07e7943d48b079944c8d # v0.9
         with:
           version: v0.18.0
-      - name: Build and push
+      - name: Build and push container images
         id: publish-image
         env:
           IMAGE_VERSION: ${{ steps.version.outputs.version }}
@@ -76,7 +78,7 @@ jobs:
           echo "digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
           echo "image-ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
 
-      - name: Attest
+      - name: Attest build provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         id: attest
         with:
@@ -102,7 +104,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Extracted version: $VERSION"
 
-      - name: Copy image to dockerhub
+      - name: Distribute container image to Docker Hub
         env:
           IMAGE_VERSION: ${{ steps.version.outputs.version }}
           GHCR_REPO: "ghcr.io/${{ github.repository }}"
