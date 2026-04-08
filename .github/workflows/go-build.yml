@@ -1,3 +1,4 @@
+---
 name: Generate release-artifacts
 on:
   release:
@@ -9,9 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Generate build files
-        uses: thatisuday/go-cross-build@v1
+        uses: thatisuday/go-cross-build@3d5409b1f31e99ed87651195a29f5aefea23e77c # v1
         with:
             platforms: 'linux/amd64, darwin/amd64, linux/arm64'
             package: ''
@@ -19,7 +20,7 @@ jobs:
             compress: 'false'
             dest: 'dist'
       - name: Publish release binaries
-        uses: skx/github-action-publish-binaries@master
+        uses: skx/github-action-publish-binaries@44887b225ceca96efd8a912d39c09ad70312af31 # master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

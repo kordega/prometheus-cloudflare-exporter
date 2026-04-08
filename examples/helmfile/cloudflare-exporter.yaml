@@ -1,3 +1,4 @@
+---
 repositories:
   - name: "cloudflare-exporter"
     url: "https://lablabs.github.io/cloudflare-exporter"
